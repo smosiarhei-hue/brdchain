@@ -1,0 +1,12 @@
+services:
+  relay:
+    build: .
+    image: brdchain
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      LISTEN_HOST: 0.0.0.0
+      LISTEN_PORT: "1080"
+    ports:
+      - "1080:1080"
+    # no volumes, no writes, nothing else needed

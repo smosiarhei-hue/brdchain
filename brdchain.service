@@ -1,0 +1,31 @@
+[Unit]
+Description=brdchain - SOCKS5 relay to a Bright Data ISP zone via a front hop
+Documentation=https://github.com/OWNER/brdchain
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=nobody
+Group=nogroup
+EnvironmentFile=/etc/brdchain.env
+ExecStart=/usr/bin/python3 /opt/brdchain/brdchain.py -v
+Restart=always
+RestartSec=5
+
+# it only needs one outbound TCP socket per client and writes nothing
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+RestrictNamespaces=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+
+[Install]
+WantedBy=multi-user.target

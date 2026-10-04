@@ -1,0 +1,33 @@
+app = "brdchain"
+primary_region = "ams"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  LISTEN_HOST = "0.0.0.0"
+  LISTEN_PORT = "1080"
+  TARGET_HOST = "brd.superproxy.io"
+  TARGET_PORT = "44445"
+
+# Raw TCP passthrough. Fly terminates nothing here: SOCKS5 is not HTTP, so the
+# port has to be a straight tcp handler.
+[[services]]
+  internal_port = 1080
+  protocol = "tcp"
+  auto_stop_machines = "suspend"
+  auto_start_machines = true
+  min_machines_running = 1
+
+  [[services.ports]]
+    port = 1080
+    handlers = ["tls"]
+
+  [[services.tcp_checks]]
+    interval = "30s"
+    timeout = "5s"
+    grace_period = "10s"
+
+# Secrets are NOT in this file. Set them once:
+#   fly secrets set BRD_USER=... BRD_PASS=... RELAY_USER=... RELAY_PASS=...
+#   fly secrets set FRONT_HOST=... FRONT_PORT=... FRONT_USER=... FRONT_PASS=...
