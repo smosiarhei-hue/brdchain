@@ -67,6 +67,9 @@ rather than a datacenter one, the chain is good.
 
 ### Fly.io (the cheap always-on option)
 
+Requires a card on the Fly account — `apps create` refuses with "We need your
+payment information to continue" otherwise.
+
 ```bash
 fly auth login
 fly launch --no-deploy        # fly.toml is already in the repo
@@ -87,7 +90,23 @@ cp .env.example .env      # fill it in
 docker compose up -d
 ```
 
-### Plain VPS, systemd, always on
+### Plain VPS, one command
+
+Any fresh Debian/Ubuntu/Alma box:
+
+```bash
+git clone https://github.com/smosiarhei-hue/brdchain && cd brdchain
+BRD_USER='brd-customer-hl_XXXX-zone-isp_proxy1' BRD_PASS='...' \
+  sudo bash deploy/bootstrap.sh
+```
+
+The script installs python3 if needed, drops the code in `/opt/brdchain`, writes
+`/etc/brdchain.env` at mode 600, opens 1080 in ufw/firewalld, installs and
+enables the unit, then runs the `--check` **from the host itself** and prints
+your `socks5://user:pass@host:1080` line. It refuses to declare success if the
+chain does not actually work. Re-run it after editing `/etc/brdchain.env`.
+
+### Manual systemd
 
 ```bash
 sudo install -m 755 brdchain.py /opt/brdchain/brdchain.py
