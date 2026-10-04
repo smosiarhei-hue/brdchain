@@ -10,8 +10,8 @@ primary_region = "ams"
   TARGET_HOST = "brd.superproxy.io"
   TARGET_PORT = "44445"
 
-# Raw TCP passthrough. Fly terminates nothing here: SOCKS5 is not HTTP, so the
-# port has to be a straight tcp handler.
+# Raw TCP passthrough. No handlers: Fly's proxy terminates TLS on ports that
+# declare handlers, and SOCKS5 has to arrive as plaintext bytes.
 [[services]]
   internal_port = 1080
   protocol = "tcp"
@@ -21,12 +21,14 @@ primary_region = "ams"
 
   [[services.ports]]
     port = 1080
-    handlers = ["tls"]
 
   [[services.tcp_checks]]
     interval = "30s"
     timeout = "5s"
     grace_period = "10s"
+
+# Clients outside Fly need a public v4: `fly ips allocate`. The .internal
+# 6to4 address is only routable from other Fly apps.
 
 # Secrets are NOT in this file. Set them once:
 #   fly secrets set BRD_USER=... BRD_PASS=... RELAY_USER=... RELAY_PASS=...
