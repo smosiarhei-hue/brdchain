@@ -1,14 +1,18 @@
 import Foundation
 import UIKit
 
-/// Launches MLBB, falling back to the store when it isn't installed.
+/// Launches MLBB if it is installed, otherwise sends the user to the store.
 @MainActor
 enum GameLauncher {
 
     private static let schemes = ["mobilelegends://", "mlbb://"]
+    static let garenaGlobalStore = URL(string: "https://apps.apple.com/app/id1202080142")!
 
-    static func isInstalled() -> Bool {
-        schemes.contains { UIApplication.shared.canOpenURL(URL(string: $0)!) }
+    static var isInstalled: Bool {
+        schemes.contains { scheme in
+            guard let url = URL(string: scheme) else { return false }
+            return UIApplication.shared.canOpenURL(url)
+        }
     }
 
     @discardableResult
@@ -20,11 +24,7 @@ enum GameLauncher {
                 return true
             }
         }
+        UIApplication.shared.open(garenaGlobalStore)
         return false
-    }
-
-    static func openStore(for region: Region) {
-        guard let url = URL(string: region.storeURL) else { return }
-        UIApplication.shared.open(url)
     }
 }

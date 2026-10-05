@@ -4,6 +4,8 @@ MLBBServerPicker/build/
 MLBBServerPicker/*.ipa
 MLBBServerPicker/Payload/
 MLBBServerPicker/Sources/Info.plist
+__pycache__/
+*.pyc
 
 # macOS
 .DS_Store

@@ -2,170 +2,193 @@ import SwiftUI
 
 struct ContentView: View {
     @EnvironmentObject private var scanner: ServerScanner
-    @State private var selectedRegionID: String?
-    @State private var showingCustomHost = false
+    @State private var showingImporter = false
+    @State private var showingHelp = false
 
-    private var regions: [Region] { RegionCatalog.all }
-
-    /// Manual choice always wins; otherwise the lowest-ping region is used.
-    private var effectiveRegion: Region? {
-        if let selectedRegionID,
-           let match = regions.first(where: { $0.id == selectedRegionID }) {
-            return match
-        }
-        return scanner.ranking.first?.region
-    }
+    private var reachable: [HostResult] { scanner.sortedResults().filter(\.reachable) }
+    private var unreachable: [HostResult] { scanner.sortedResults().filter { !$0.reachable } }
 
     var body: some View {
         NavigationStack {
             List {
-                if let best = scanner.ranking.first {
-                    bestSection(best)
-                }
-
-                statusSection
-
-                regionsSection
+                verdictSection
+                if !reachable.isEmpty { reachableSection }
+                if !unreachable.isEmpty { unreachableSection }
+                actionsSection
             }
-            .navigationTitle("MLBB Server Ping")
+            .navigationTitle("MLBB Server Picker")
             .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button { showingHelp = true } label: {
+                        Image(systemName: "questionmark.circle")
+                    }
+                }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button {
                         Task { await scanner.scan() }
                     } label: {
-                        Image(systemName: "arrow.clockwise")
+                        if scanner.isScanning {
+                            ProgressView()
+                        } else {
+                            Image(systemName: "arrow.clockwise")
+                        }
                     }
                     .disabled(scanner.isScanning)
                 }
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button { showingCustomHost = true } label: {
-                        Image(systemName: "plus")
-                    }
-                }
             }
-            .sheet(isPresented: $showingCustomHost) {
-                CustomHostView()
+            .sheet(isPresented: $showingImporter) { HostImporterView() }
+            .sheet(isPresented: $showingHelp) { HowItWorksView() }
+            .task {
+                if scanner.results.isEmpty {
+                    await scanner.scan()
+                }
             }
         }
     }
 
-    // MARK: - Sections
+    // MARK: - Verdict
 
-    private func bestSection(_ best: (region: Region, latencyMS: Double)) -> some View {
+    private var verdictSection: some View {
         Section {
-            VStack(alignment: .leading, spacing: 8) {
-                HStack {
-                    Text(best.region.displayName)
+            VStack(alignment: .leading, spacing: 10) {
+                if scanner.isScanning {
+                    HStack(spacing: 8) {
+                        ProgressView()
+                        Text("Проверяю хосты…")
+                    }
+                    .font(.headline)
+                } else {
+                    Text(scanner.verdict.headline)
                         .font(.headline)
-                    Spacer()
-                    Text(String(format: "%.0f ms", best.latencyMS))
-                        .font(.system(.headline, design: .rounded))
-                        .foregroundStyle(color(for: best.latencyMS))
+                        .foregroundStyle(verdictColor)
                 }
-                Text("Выбирай этот регион на стартовом экране MLBB: **\(best.region.inGameLabel)**")
+
+                Text(scanner.verdict.detail)
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }
             .padding(.vertical, 4)
 
-            Button {
-                if GameLauncher.launch() {
-                    // launched
-                } else if let region = effectiveRegion {
-                    GameLauncher.openStore(for: region)
-                }
-            } label: {
-                Label(GameLauncher.isInstalled() ? "Запустить MLBB" : "MLBB не найдена — открыть стор",
-                      systemImage: "play.fill")
-                    .frame(maxWidth: .infinity)
-            }
-            .buttonStyle(.borderedProminent)
-        } header: {
-            Text("Лучший вариант")
-        }
-    }
-
-    @ViewBuilder
-    private var statusSection: some View {
-        if let scannedAt = scanner.scannedAt {
-            Section {
-                HStack {
-                    Text(scanner.isScanning ? "Сканирую…" : "Просканировано")
-                    Spacer()
-                    Text(scannedAt, style: .time)
-                        .foregroundStyle(.secondary)
-                }
-                .font(.footnote)
-            }
-        }
-    }
-
-    private var regionsSection: some View {
-        Section {
-            ForEach(regions) { region in
-                row(for: region)
-            }
-        } header: {
-            Text("Все серверы")
-        } footer: {
-            Text("Регион выбирается один раз при первом входе в игру. Смена возможна только сбросом данных приложения.")
-        }
-    }
-
-    private func row(for region: Region) -> some View {
-        let entry = scanner.ranking.first { $0.region.id == region.id }
-        let isSelected = effectiveRegion?.id == region.id
-        let isCustom = region.id.hasPrefix("custom-")
-
-        return Button {
-            selectedRegionID = region.id
-        } label: {
-            HStack(spacing: 12) {
-                Text(region.flag)
-                    .font(.title2)
-
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(region.title)
-                        .foregroundStyle(.primary)
-                    Text(region.inGameLabel)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-
-                Spacer()
-
-                if let entry {
-                    Text(String(format: "%.0f ms", entry.latencyMS))
-                        .font(.system(.body, design: .rounded))
-                        .foregroundStyle(color(for: entry.latencyMS))
-                } else if scanner.scannedAt != nil {
-                    Text("нет ответа")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-
-                if isSelected {
-                    Image(systemName: "checkmark.circle.fill")
-                        .foregroundStyle(.tint)
-                }
-            }
-            .contentShape(Rectangle())
-        }
-        .swipeActions {
-            if isCustom {
-                Button(role: .destructive) {
-                    RegionCatalog.removeCustom(id: region.id)
+            if let best = bestReachable {
+                Button {
+                    GameLauncher.launch()
                 } label: {
-                    Label("Удалить", systemImage: "trash")
+                    Label("Запустить MLBB", systemImage: "play.fill")
+                        .frame(maxWidth: .infinity)
                 }
+                .buttonStyle(.borderedProminent)
             }
         }
     }
 
-    // MARK: - Helpers
+    private var bestReachable: HostResult? {
+        scanner.sortedResults().first { $0.reachable && $0.host.origin == .verified }
+    }
 
-    private func color(for latency: Double) -> Color {
-        switch latency {
+    private var verdictColor: Color {
+        switch scanner.verdict {
+        case .verifiedHostReachable: return .green
+        case .noVerifiedHosts, .nothingResponded: return .orange
+        }
+    }
+
+    // MARK: - Lists
+
+    private var reachableSection: some View {
+        Section("Отвечают") {
+            ForEach(reachable) { result in
+                HostRow(result: result)
+            }
+        }
+    }
+
+    private var unreachableSection: some View {
+        Section {
+            ForEach(unreachable) { result in
+                HostRow(result: result)
+            }
+        } header: {
+            Text("Не отвечают (\(unreachable.count))")
+        } footer: {
+            Text("Это нормально. Встроенные адреса — заглушки; настоящие гейтвеи надо взять из сетевого лога MLBB.")
+        }
+    }
+
+    // MARK: - Actions
+
+    private var actionsSection: some View {
+        Section {
+            Button {
+                showingImporter = true
+            } label: {
+                Label("Импортировать хосты из логов", systemImage: "square.and.arrow.down")
+            }
+
+            if !HostStore.imported.isEmpty {
+                Button(role: .destructive) {
+                    HostStore.removeAll()
+                    Task { await scanner.scan() }
+                } label: {
+                    Label("Удалить импортированные (\(HostStore.imported.count))", systemImage: "trash")
+                }
+            }
+        }
+    }
+}
+
+// MARK: - Row
+
+private struct HostRow: View {
+    let result: HostResult
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Image(systemName: result.reachable ? "checkmark.circle.fill" : "xmark.circle")
+                .foregroundStyle(result.reachable ? .green : .secondary)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(result.host.host)
+                    .font(.callout)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+
+                HStack(spacing: 6) {
+                    Text(result.host.origin.label)
+                        .font(.caption2)
+                        .padding(.horizontal, 5)
+                        .padding(.vertical, 1)
+                        .background(Color.secondary.opacity(0.15), in: Capsule())
+
+                    if let region = result.host.regionHint {
+                        Text(region)
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
+                    if let note = result.host.note, result.host.regionHint == nil {
+                        Text(note)
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
+
+            Spacer(minLength: 4)
+
+            if let latency = result.latencyMS {
+                Text(String(format: "%.0f ms", latency))
+                    .font(.system(.callout, design: .rounded))
+                    .foregroundStyle(latencyColor(latency))
+            } else {
+                Text("—")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .padding(.vertical, 2)
+    }
+
+    private func latencyColor(_ value: Double) -> Color {
+        switch value {
         case ..<60:  return .green
         case ..<120: return .orange
         default:     return .red
@@ -174,6 +197,5 @@ struct ContentView: View {
 }
 
 #Preview {
-    ContentView()
-        .environmentObject(ServerScanner())
+    ContentView().environmentObject(ServerScanner())
 }
