@@ -94,7 +94,25 @@ jobs:
           path: MLBBServerPicker/${SCHEME}.ipa
           retention-days: 30
 
-      - name: Attach to release
+      # Every run publishes to a release, not just tagged ones. Artifacts
+      # expire after 30 days and live behind the Actions UI, so a signed ipa
+      # that only exists there is easy to lose. The rolling 'latest' release
+      # is the single place to look; a tagged build gets its own release too.
+      - name: Publish to rolling latest release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: latest
+          name: latest
+          body: |
+            Unsigned build of MLBB Server Picker.
+
+            Sign `MLBBServerPicker.ipa` locally in GBox Esign with your own
+            Apple Development certificate. No Apple credentials exist in CI.
+
+            Commit: `${{ github.sha }}`
+          files: MLBBServerPicker/${SCHEME}.ipa
+
+      - name: Publish tagged release
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
