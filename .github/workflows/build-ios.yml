@@ -3,21 +3,23 @@ name: build-ios
 on:
   workflow_dispatch:
   push:
-    tags:
-      - "v*"
     branches:
       - main
     paths:
       - "MLBBServerPicker/**"
       - ".github/workflows/build-ios.yml"
+    tags:
+      - "v*"
 
 jobs:
   build:
     name: Build unsigned ipa
     runs-on: macos-15
+    permissions:
+      contents: write
+
     env:
       SCHEME: MLBBServerPicker
-      BUNDLE_ID: com.nyx.mlabb.serverpicker
 
     steps:
       - uses: actions/checkout@v4
@@ -40,10 +42,13 @@ jobs:
       # Unsigned on purpose: signing happens locally in GBox Esign with your
       # own certificate, so the artifact carries no secrets and no Apple creds
       # ever enter CI.
+      #
+      # No `set -o pipefail` here on purpose. The raw xcodebuild log is what
+      # matters when a build fails, and filtering it through xcpretty only
+      # makes diagnosis harder.
       - name: Build
         working-directory: MLBBServerPicker
         run: |
-          set -o pipefail
           xcodebuild \
             -project "${SCHEME}.xcodeproj" \
             -scheme "${SCHEME}" \
@@ -55,25 +60,28 @@ jobs:
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGNING_ALLOWED=NO \
             ENABLE_BITCODE=NO \
-            clean build \
-            | xcpretty || exit $?
+            clean build
 
       - name: Package ipa
         working-directory: MLBBServerPicker
         run: |
           set -euo pipefail
           APP_PATH="build/Build/Products/Release-iphoneos/${SCHEME}.app"
-          test -d "${APP_PATH}"
+
+          if [ ! -d "${APP_PATH}" ]; then
+            echo "::error::app bundle missing at ${APP_PATH} — the build step above did not produce one"
+            ls -R build/Build/Products 2>/dev/null || true
+            exit 1
+          fi
 
           rm -rf Payload "${SCHEME}.ipa"
           mkdir -p Payload
           cp -R "${APP_PATH}" Payload/
 
-          # Strip the embedded stub signature left by the unsigned build.
+          # The unsigned build leaves no signature directory, but clear it if a
+          # future config does produce one — a stale stub breaks Esign.
           rm -rf "Payload/${SCHEME}.app/_CodeSignature"
-          if [ -f "Payload/${SCHEME}.app/embedded.mobileprovision" ]; then
-            rm -f "Payload/${SCHEME}.app/embedded.mobileprovision"
-          fi
+          rm -f "Payload/${SCHEME}.app/embedded.mobileprovision"
 
           zip -qry "${SCHEME}.ipa" Payload
           rm -rf Payload
