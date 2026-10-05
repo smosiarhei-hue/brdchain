@@ -1,0 +1,9 @@
+# XcodeGen — the generated project is a build artifact, Project.yml is the source
+MLBBServerPicker/*.xcodeproj/
+MLBBServerPicker/build/
+MLBBServerPicker/*.ipa
+MLBBServerPicker/Payload/
+MLBBServerPicker/Sources/Info.plist
+
+# macOS
+.DS_Store

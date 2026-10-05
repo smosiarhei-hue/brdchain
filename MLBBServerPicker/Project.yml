@@ -1,0 +1,50 @@
+name: MLBBServerPicker
+options:
+  bundleIdPrefix: com.nyx
+  deploymentTarget:
+    iOS: "16.0"
+  createIntermediateGroups: true
+  groupSortPosition: top
+
+settings:
+  base:
+    SWIFT_VERSION: "5.9"
+    MARKETING_VERSION: "1.0.0"
+    CURRENT_PROJECT_VERSION: "1"
+    CODE_SIGN_STYLE: Manual
+    ASSETCATALOG_COMPILER_APPICON_NAME: ""
+    ENABLE_USER_SCRIPT_SANDBOXING: "NO"
+
+targets:
+  MLBBServerPicker:
+    type: application
+    platform: iOS
+    sources:
+      - path: Sources
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.nyx.mlabb.serverpicker
+        TARGETED_DEVICE_FAMILY: "1,2"
+        INFOPLIST_KEY_UIRequiresFullScreen: "NO"
+        INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone: "UIInterfaceOrientationPortrait"
+        INFOPLIST_KEY_UILaunchScreen_Generation: "YES"
+    info:
+      path: Sources/Info.plist
+      properties:
+        CFBundleDisplayName: ServerPing
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        UILaunchScreen: {}
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+        UIRequiredDeviceCapabilities:
+          - armv7
+        LSRequiresIPhoneOS: true
+        LSApplicationQueriesSchemes:
+          - mobilelegends
+        CFBundleURLTypes:
+          - CFBundleURLName: com.nyx.mlabb.serverpicker
+            CFBundleURLSchemes:
+              - srpicker
