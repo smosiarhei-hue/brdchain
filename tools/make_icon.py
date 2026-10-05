@@ -104,13 +104,20 @@ def main() -> None:
 
     for points, scale in SIZES:
         px = int(round(points * scale))
-        name = f"Icon-{points:g}x{points:g}@{scale}x.png" if points % 1 else f"Icon-{points}@{scale}x.png"
         if scale == 1:
             name = f"Icon-{points:g}.png"
+        else:
+            name = f"Icon-{points:g}@{scale}x.png"
 
         target = os.path.join(OUT_ROOT, name)
         write_png(target, px, render(px))
-        images.append(f'{{"size":"{points:g}x{points:g}","idiom":"universal","filename":"{name}","scale":"{scale}x"}}')
+        # platform/idiom must both be present: actool matches entries against a
+        # required idiom and platform pair, and an entry missing "platform" is
+        # treated as matching nothing at all, which fails the build outright.
+        images.append(
+            f'{{"size":"{points:g}x{points:g}","idiom":"universal",'
+            f'"filename":"{name}","scale":"{scale}x","platform":"ios"}}'
+        )
         print(f"  {name:28} {px}x{px}")
 
     contents = (

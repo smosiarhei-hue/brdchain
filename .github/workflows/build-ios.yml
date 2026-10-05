@@ -49,6 +49,9 @@ jobs:
       - name: Build
         working-directory: MLBBServerPicker
         run: |
+          # pipefail is required here and safe: without it the pipeline reports
+          # tee's exit status and a failed build would pass as a green step.
+          set -o pipefail
           xcodebuild \
             -project "${SCHEME}.xcodeproj" \
             -scheme "${SCHEME}" \
@@ -60,7 +63,27 @@ jobs:
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGNING_ALLOWED=NO \
             ENABLE_BITCODE=NO \
-            clean build
+            clean build 2>&1 | tee build.log
+
+      # Job logs need auth to read through the API, but annotations do not.
+      # Mirroring the compiler errors into workflow commands means a failing
+      # build can be diagnosed from the check-runs endpoint alone.
+      - name: Surface compiler errors as annotations
+        if: failure()
+        working-directory: MLBBServerPicker
+        run: |
+          if [ ! -f build.log ]; then
+            echo "::error::build.log was never written — the step failed before xcodebuild ran"
+            exit 0
+          fi
+          grep -E '(error|warning):' build.log | head -40 | while IFS= read -r line; do
+            echo "::error title=build::${line//'%'/'%25'}"
+          done || true
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "### Build log tail" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          tail -60 build.log >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
 
       - name: Package ipa
         working-directory: MLBBServerPicker
