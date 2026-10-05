@@ -17,14 +17,21 @@ import zlib
 
 OUT_ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "MLBBServerPicker", "Sources", "Assets.xcassets", "AppIcon.appiconset")
 
-# (points, scale) -> pixel size
-SIZES = [
-    (20, 2), (20, 3),      # notification
-    (29, 2), (29, 3),      # settings
-    (40, 2), (40, 3),      # spotlight
-    (60, 2), (60, 3),      # app switcher
-    (76, 1), (76, 2),      # iPad
-    (83.5, 2),             # iPad Pro
+# (points, scale, idiom). actool matches entries against an exact
+# idiom+size+scale triple and rejects the set outright when a required slot is
+# missing, so the full canonical matrix has to be present — including the
+# 1024x1024 marketing icon.
+ICON_SPECS = [
+    (20, 2, "iphone"), (20, 3, "iphone"),
+    (29, 2, "iphone"), (29, 3, "iphone"),
+    (40, 2, "iphone"), (40, 3, "iphone"),
+    (60, 2, "iphone"), (60, 3, "iphone"),
+    (20, 1, "ipad"), (20, 2, "ipad"),
+    (29, 1, "ipad"), (29, 2, "ipad"),
+    (40, 1, "ipad"), (40, 2, "ipad"),
+    (76, 1, "ipad"), (76, 2, "ipad"),
+    (83.5, 2, "ipad"),
+    (1024, 1, "ios-marketing"),
 ]
 
 # Deep indigo to cyan, reading as a signal/wave motif.
@@ -100,25 +107,26 @@ def write_png(path: str, size: int, raw: bytes) -> None:
 
 def main() -> None:
     os.makedirs(OUT_ROOT, exist_ok=True)
+    # Wipe first: a stale icon left behind by a rename becomes an unreferenced
+    # child of the set, and actool rejects that even when the new file is valid.
+    for stale in os.listdir(OUT_ROOT):
+        if stale.endswith(".png"):
+            os.remove(os.path.join(OUT_ROOT, stale))
+
     images = []
 
-    for points, scale in SIZES:
+    for points, scale, idiom in ICON_SPECS:
         px = int(round(points * scale))
-        if scale == 1:
-            name = f"Icon-{points:g}.png"
-        else:
-            name = f"Icon-{points:g}@{scale}x.png"
+        suffix = "" if scale == 1 else f"@{scale}x"
+        name = f"Icon-{idiom}-{points:g}{suffix}.png"
 
         target = os.path.join(OUT_ROOT, name)
         write_png(target, px, render(px))
-        # platform/idiom must both be present: actool matches entries against a
-        # required idiom and platform pair, and an entry missing "platform" is
-        # treated as matching nothing at all, which fails the build outright.
         images.append(
-            f'{{"size":"{points:g}x{points:g}","idiom":"universal",'
-            f'"filename":"{name}","scale":"{scale}x","platform":"ios"}}'
+            f'{{"size":"{points:g}x{points:g}","idiom":"{idiom}",'
+            f'"filename":"{name}","scale":"{scale}x"}}'
         )
-        print(f"  {name:28} {px}x{px}")
+        print(f"  {name:34} {px}x{px}")
 
     contents = (
         "{\n  \"images\" : [\n    " + ",\n    ".join(images) + "\n  ],\n"

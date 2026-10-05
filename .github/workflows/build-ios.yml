@@ -24,8 +24,25 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Do not pin a version. The image ships several Xcodes and the newest
+      # simulator runtimes; an older pinned Xcode can fail with
+      # "No simulator runtime version ... available to use with
+      # iphonesimulator SDK version ..." even when building for a device.
+      # Highest non-beta release wins.
       - name: Select Xcode
-        run: sudo xcode-select -s /Applications/Xcode_16.2.app
+        run: |
+          set -euo pipefail
+          XCODE=$(ls -d /Applications/Xcode_*.app 2>/dev/null \
+                 | grep -v -i beta \
+                 | sort -V \
+                 | tail -1)
+          if [ -z "${XCODE}" ]; then
+            echo "::error::no Xcode found under /Applications"
+            ls -d /Applications/Xcode* || true
+            exit 1
+          fi
+          echo "Using ${XCODE}"
+          sudo xcode-select -s "${XCODE}"
 
       - name: Show toolchain
         run: |
@@ -145,6 +162,37 @@ jobs:
             Commit: `${{ github.sha }}`
           fail_on_unmatched_files: true
           files: MLBBServerPicker/${{ env.SCHEME }}.ipa
+
+      # The bot token is a secret in repository settings, never in the repo.
+      # The repository is public, so a token committed anywhere here would let
+      # anyone drive the bot. Set TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID under
+      # Settings -> Secrets and variables -> Actions; the step skips itself
+      # while they are unset.
+      - name: Send ipa to Telegram
+        if: success() && env.TELEGRAM_BOT_TOKEN != ''
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          set -euo pipefail
+          SHORT_SHA="${GITHUB_SHA:0:7}"
+          FILE="MLBBServerPicker/${SCHEME}.ipa"
+          CAPTION="MLBB Server Picker ${SHORT_SHA} — unsigned, sign in GBox Esign. Release: https://github.com/${GITHUB_REPOSITORY}/releases/tag/latest"
+
+          # Kept on one line on purpose: a multi-line caption inside a YAML
+          # scalar needs continuation lines indented past the key, and getting
+          # that wrong fails to parse the whole workflow file.
+          RESPONSE=$(curl --fail-with-body --silent --show-error \
+            --retry 3 --retry-delay 2 \
+            -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendDocument" \
+            -F "chat_id=${TELEGRAM_CHAT_ID}" \
+            -F "document=@${FILE};filename=${SCHEME}-${SHORT_SHA}.ipa" \
+            -F "caption=${CAPTION}" 2>&1) || {
+              echo "::error::telegram upload failed: ${RESPONSE}"
+              exit 1
+            }
+
+          echo "sent to chat ${TELEGRAM_CHAT_ID}"
 
       - name: Publish tagged release
         if: startsWith(github.ref, 'refs/tags/v')
