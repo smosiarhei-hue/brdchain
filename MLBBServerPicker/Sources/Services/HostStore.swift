@@ -26,7 +26,9 @@ struct HostStore {
     @discardableResult
     static func merge(_ raw: [String]) -> Int {
         var hosts = imported
-        let existing = Set(hosts.map(\.id))
+        // Mutable: the loop inserts into it as it walks the input, so a `let`
+        // here fails to compile.
+        var existing = Set(hosts.map(\.id))
         var added = 0
 
         for entry in raw {

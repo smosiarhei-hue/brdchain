@@ -55,8 +55,6 @@ final class ServerScanner: ObservableObject {
     @Published private(set) var scannedAt: Date?
 
     var verdict: ScanVerdict {
-        let reachable = results.filter(\.reachable)
-
         if let best = verifiedReachable.first {
             return .verifiedHostReachable(best)
         }

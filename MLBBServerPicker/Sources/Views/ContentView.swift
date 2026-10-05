@@ -69,7 +69,7 @@ struct ContentView: View {
             }
             .padding(.vertical, 4)
 
-            if let best = bestReachable {
+            if bestReachable != nil {
                 Button {
                     GameLauncher.launch()
                 } label: {
